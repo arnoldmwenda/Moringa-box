@@ -30,6 +30,7 @@ flask run #Test endpoint: http://127.0.0.1:5000/health
 deactivate
 cd ..
 ```
+[Database design](https://dbdiagram.io/d/MoringaBox-Database-Design-6a84dcb9fd15a881e5aec2ca)
 
   
 
