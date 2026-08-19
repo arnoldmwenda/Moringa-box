@@ -32,6 +32,35 @@ cd ..
 ```
 [Database design](https://dbdiagram.io/d/MoringaBox-Database-Design-6a84dcb9fd15a881e5aec2ca)
 
+## Database setup and migrations
+
+**PostgreSQL Database Initialization:**
+```bash
+sudo service postgresql start
+sudo -u postgres psql -c "CREATE DATABASE drive_clone;"
+```
+
+**Apply pending migrations:**
+```bash
+flask db upgrade
+```
+
+**Autogenerate a new migration script:**
+```bash
+flask db migrate -m "Describe database schema changes"
+```
+
+**Roll back the previous migration:**
+```bash
+flask db downgrade
+```
+
+## Running tests
+```bash
+python -m pytest
+```
+
+
   
 
 
