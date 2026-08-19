@@ -1,16 +1,18 @@
 import pytest
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from app import create_app, db
-from app.models.user import User
-from app.models.folder import Folder
-from app.models.file import File
 
 @pytest.fixture
 def app():
-    app = create_app()
+    app = create_app('testing')
     app.config.update({
-        'TESTING': True,
-        'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
-        'JWT_SECRET_KEY': 'test-jwt-secret'
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "WTF_CSRF_ENABLED": False,
     })
 
     with app.app_context():
@@ -22,7 +24,3 @@ def app():
 @pytest.fixture
 def client(app):
     return app.test_client()
-
-@pytest.fixture
-def runner(app):
-    return app.test_cli_runner()
