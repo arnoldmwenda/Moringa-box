@@ -12,9 +12,12 @@ jwt = JWTManager()
 bcrypt = Bcrypt()
 ma = Marshmallow()
 
-def create_app(config_name=None):
+def create_app(config_override=None):
     app = Flask(__name__)
     app.config.from_object('app.config.Config')
+
+    if config_override:
+        app.config.update(config_override)
 
     db.init_app(app)
     migrate.init_app(app, db)
