@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+test('renders the Moringa Box landing screen', () => {
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(screen.getByText(/moringa box/i)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /get started/i })).toBeInTheDocument();
 });
