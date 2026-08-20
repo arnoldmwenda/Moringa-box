@@ -3,7 +3,7 @@ import App from "./App";
 
 test("renders the Moringa Box shopping experience", () => {
   render(<App />);
-  expect(screen.getByText(/moringa box/i)).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /moringa box home/i })).toBeInTheDocument();
   expect(
     screen.getByRole("heading", { name: /a little green for your everyday/i }),
   ).toBeInTheDocument();

@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import GridDistortion from "./components/GridDistortion";
+import { searchWithBackend, transcribeWithAzure } from "./services/searchService";
 
 const boxes = [
   {
@@ -60,12 +62,23 @@ const boxes = [
 
 const categories = ["All boxes", "Everyday", "Beginner", "Wellness"];
 const pageSize = 3;
+const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
 function App() {
   const [activeCategory, setActiveCategory] = useState("All boxes");
   const [page, setPage] = useState(1);
   const [cart, setCart] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState(null);
+  const [isListening, setIsListening] = useState(false);
+  const [searchStatus, setSearchStatus] = useState("");
+  const [signedInUser, setSignedInUser] = useState(null);
+  const [authStatus, setAuthStatus] = useState("");
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [authMethod, setAuthMethod] = useState("email");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const filteredBoxes = useMemo(
     () =>
       activeCategory === "All boxes"
@@ -73,15 +86,101 @@ function App() {
         : boxes.filter((box) => box.category === activeCategory),
     [activeCategory],
   );
-  const totalPages = Math.ceil(filteredBoxes.length / pageSize);
-  const visibleBoxes = filteredBoxes.slice(
+  const searchableBoxes = useMemo(
+    () => filteredBoxes.map((box) => ({ ...box, name: box.title, type: box.category, updated: box.description })),
+    [filteredBoxes],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    setSearchResults(null);
+    if (query.trim()) {
+      searchWithBackend(searchableBoxes, query).then((results) => {
+        if (!cancelled) setSearchResults(results);
+      });
+    }
+    return () => { cancelled = true; };
+  }, [query, searchableBoxes]);
+  const displayedBoxes = query.trim()
+    ? searchResults || searchableBoxes.filter((box) => `${box.title} ${box.category} ${box.description}`.toLowerCase().includes(query.toLowerCase()))
+    : filteredBoxes;
+  const totalPages = Math.max(1, Math.ceil(displayedBoxes.length / pageSize));
+  const visibleBoxes = displayedBoxes.slice(
     (page - 1) * pageSize,
     page * pageSize,
   );
   const cartTotal = cart.reduce((total, box) => total + box.price, 0);
+  useEffect(() => {
+    if (!googleClientId || document.getElementById("google-identity-script")) return undefined;
+    const script = document.createElement("script");
+    script.id = "google-identity-script";
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = () => {
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response) => {
+          try {
+            const payload = JSON.parse(window.atob(response.credential.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+            setSignedInUser({ name: payload.name, email: payload.email, picture: payload.picture });
+            setAuthStatus(`Signed in as ${payload.name}`);
+          } catch {
+            setAuthStatus("Google sign-in returned an invalid credential.");
+          }
+        },
+      });
+    };
+    document.head.appendChild(script);
+    return undefined;
+  }, []);
+  const signInWithGoogle = () => {
+    if (!googleClientId) {
+      setAuthStatus("Add REACT_APP_GOOGLE_CLIENT_ID to enable Google sign-in.");
+      return;
+    }
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt();
+    } else {
+      setAuthStatus("Loading Google sign-in...");
+    }
+  };
+  const openLogin = () => {
+    setLoginOpen(true);
+    setAuthStatus("");
+  };
+  const signInWithEmail = (event) => {
+    event.preventDefault();
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      setAuthStatus("Enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setAuthStatus("Password must be at least 6 characters.");
+      return;
+    }
+    const name = email.split("@")[0].replace(/[._-]/g, " ");
+    setSignedInUser({ name, email });
+    setAuthStatus(`Signed in as ${email}`);
+  };
+  const signInWithMicrosoft = () => {
+    setAuthStatus("Microsoft sign-in needs an Azure AD client ID in the app configuration.");
+  };
   const changeCategory = (category) => {
     setActiveCategory(category);
     setPage(1);
+  };
+  const startVoiceSearch = async () => {
+    if (isListening) return;
+    setIsListening(true);
+    setSearchStatus("Listening...");
+    try {
+      const result = await transcribeWithAzure();
+      setQuery(result.text);
+      setSearchStatus(`Searching for "${result.text}"`);
+    } catch (error) {
+      setSearchStatus(error.message);
+    } finally {
+      setIsListening(false);
+    }
   };
 
   return (
@@ -99,7 +198,7 @@ function App() {
           <a href="#how-it-works">How it works</a>
         </nav>
         <div className="header-actions">
-          <button className="login-btn">Sign in</button>
+          <button className="login-btn" onClick={openLogin}>{signedInUser ? signedInUser.name : "Sign in"}</button>
           <button
             className="cart-btn"
             onClick={() => setCartOpen(true)}
@@ -108,6 +207,7 @@ function App() {
             Cart <span>{cart.length}</span>
           </button>
         </div>
+        {authStatus && <span className="auth-status" role="status">{authStatus}</span>}
       </header>
 
       <section className="hero-section" id="top">
@@ -126,6 +226,7 @@ function App() {
           </div>
         </div>
         <div className="hero-art" aria-label="Fresh greens and moringa leaves">
+          <GridDistortion imageSrc="https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=1200&q=90" grid={12} mouse={0.12} strength={0.16} relaxation={0.9} />
           <div className="hero-badge">
             Plant-powered
             <br />
@@ -198,8 +299,13 @@ function App() {
               </button>
             ))}
           </div>
-          <span className="result-count">{filteredBoxes.length} boxes</span>
+          <div className="catalog-search-wrap">
+            <input className="catalog-search" aria-label="Search boxes" placeholder="Search boxes" value={query} onChange={(event) => { setPage(1); setQuery(event.target.value); setSearchStatus(event.target.value ? `Searching for "${event.target.value}"` : ""); }} />
+            <button className={`voice-button ${isListening ? "listening" : ""}`} onClick={startVoiceSearch} aria-label="Start voice search" title="Voice search">{isListening ? "●" : "🎙"}</button>
+          </div>
+          <span className="result-count">{displayedBoxes.length} boxes</span>
         </div>
+        {searchStatus && <p className="search-status" role="status">{searchStatus}</p>}
         <div className="box-grid">
           {visibleBoxes.map((box) => (
             <article className="box-card" key={box.id}>
@@ -313,6 +419,36 @@ function App() {
               Continue to checkout
             </button>
           </aside>
+        </div>
+      )}
+      {loginOpen && (
+        <div className="login-overlay" role="presentation" onClick={() => setLoginOpen(false)}>
+          <section className="login-panel" role="dialog" aria-modal="true" aria-labelledby="login-title" onClick={(event) => event.stopPropagation()}>
+            <GridDistortion imageSrc="https://images.unsplash.com/photo-1497250681960-ef046c08a56e?auto=format&fit=crop&w=1200&q=90" grid={10} mouse={0.1} strength={0.15} relaxation={0.9} className="login-distortion" />
+            <div className="login-content">
+              <button className="login-close" onClick={() => setLoginOpen(false)} aria-label="Close sign in">×</button>
+              <span className="brand-mark login-mark">M</span>
+              <p className="eyebrow">Welcome back</p>
+              <h2 id="login-title">Sign in to Moringa Box</h2>
+              <p className="login-copy">Keep your rituals, saved boxes, and next delivery in one place.</p>
+              <div className="auth-methods" role="tablist" aria-label="Sign in methods">
+                <button className={authMethod === "email" ? "auth-method active" : "auth-method"} onClick={() => setAuthMethod("email")} role="tab" aria-selected={authMethod === "email"}>Email</button>
+                <button className={authMethod === "google" ? "auth-method active" : "auth-method"} onClick={() => setAuthMethod("google")} role="tab" aria-selected={authMethod === "google"}>Google</button>
+                <button className={authMethod === "microsoft" ? "auth-method active" : "auth-method"} onClick={() => setAuthMethod("microsoft")} role="tab" aria-selected={authMethod === "microsoft"}>Microsoft</button>
+              </div>
+              {authMethod === "email" && <form className="email-login-form" onSubmit={signInWithEmail}>
+                <label htmlFor="login-email">Email address</label>
+                <input id="login-email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" />
+                <label htmlFor="login-password">Password</label>
+                <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="At least 6 characters" />
+                <button className="google-login-btn" type="submit">Sign in with email</button>
+              </form>}
+              {authMethod === "google" && <button className="google-login-btn" onClick={signInWithGoogle}>Continue with Google</button>}
+              {authMethod === "microsoft" && <button className="google-login-btn microsoft-login-btn" onClick={signInWithMicrosoft}>Continue with Microsoft</button>}
+              {signedInUser && <p className="login-success" role="status">Signed in as {signedInUser.name}</p>}
+              {authStatus && <p className="login-status" role="status">{authStatus}</p>}
+            </div>
+          </section>
         </div>
       )}
     </main>
