@@ -30,17 +30,26 @@ export default function GridDistortion({
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return undefined;
-    if (typeof window === "undefined" || !window.WebGLRenderingContext) return undefined;
+    if (!container || typeof window === "undefined") return undefined;
 
-    const scene = new THREE.Scene();
+    // Check WebGL support before attempting renderer initialization
+    try {
+      const testCanvas = document.createElement("canvas");
+      const gl = testCanvas.getContext("webgl") || testCanvas.getContext("experimental-webgl");
+      if (!gl) return undefined;
+    } catch {
+      return undefined;
+    }
+
     let renderer;
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
     } catch {
       return undefined;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const scene = new THREE.Scene();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
     container.appendChild(renderer.domElement);
 
@@ -56,17 +65,28 @@ export default function GridDistortion({
     const plane = new THREE.Mesh(geometry, material);
     scene.add(plane);
 
-    const texture = new THREE.TextureLoader().load(imageSrc, (loadedTexture) => {
-      loadedTexture.minFilter = THREE.LinearFilter;
-      loadedTexture.magFilter = THREE.LinearFilter;
-      loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
-      loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
-      uniforms.uTexture.value = loadedTexture;
-    });
+    let texture = null;
+    if (imageSrc) {
+      texture = new THREE.TextureLoader().load(
+        imageSrc,
+        (loadedTexture) => {
+          loadedTexture.minFilter = THREE.LinearFilter;
+          loadedTexture.magFilter = THREE.LinearFilter;
+          loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
+          loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
+          uniforms.uTexture.value = loadedTexture;
+        },
+        undefined,
+        () => {
+          // Texture loading failed gracefully
+        }
+      );
+    }
 
     const mouseState = { x: 0.5, y: 0.5, previousX: 0.5, previousY: 0.5, velocityX: 0, velocityY: 0 };
     const handleMouseMove = (event) => {
       const rect = container.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
       const x = (event.clientX - rect.left) / rect.width;
       const y = 1 - (event.clientY - rect.top) / rect.height;
       mouseState.velocityX = x - mouseState.previousX;
@@ -76,12 +96,16 @@ export default function GridDistortion({
       mouseState.previousX = x;
       mouseState.previousY = y;
     };
+
     const handleMouseLeave = () => {
       mouseState.velocityX = 0;
       mouseState.velocityY = 0;
       mouseState.x = 0.5;
       mouseState.y = 0.5;
+      mouseState.previousX = 0.5;
+      mouseState.previousY = 0.5;
     };
+
     const resize = () => {
       const { width, height } = container.getBoundingClientRect();
       if (!width || !height) return;
@@ -92,10 +116,11 @@ export default function GridDistortion({
       camera.right = aspect / 2;
       camera.updateProjectionMatrix();
     };
+
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(container);
-    container.addEventListener("mousemove", handleMouseMove);
-    container.addEventListener("mouseleave", handleMouseLeave);
+    container.addEventListener("mousemove", handleMouseMove, { passive: true });
+    container.addEventListener("mouseleave", handleMouseLeave, { passive: true });
 
     let animationFrame;
     const animate = () => {
@@ -118,6 +143,10 @@ export default function GridDistortion({
           }
         }
       }
+      // Decay velocity each frame to prevent runaway distortion when cursor stops moving
+      mouseState.velocityX *= 0.85;
+      mouseState.velocityY *= 0.85;
+
       dataTexture.needsUpdate = true;
       renderer.render(scene, camera);
     };
@@ -129,15 +158,28 @@ export default function GridDistortion({
       resizeObserver.disconnect();
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseleave", handleMouseLeave);
-      renderer.dispose();
-      renderer.forceContextLoss();
+      try {
+        renderer.dispose();
+        renderer.forceContextLoss();
+      } catch {
+        // ignore
+      }
       geometry.dispose();
       material.dispose();
       dataTexture.dispose();
-      texture.dispose();
-      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+      if (texture) {
+        try {
+          texture.dispose();
+        } catch {
+          // ignore
+        }
+      }
+      if (container.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
+      }
     };
   }, [grid, mouse, strength, relaxation, imageSrc]);
 
   return <div ref={containerRef} className={`distortion-container ${className}`} aria-hidden="true" />;
 }
+

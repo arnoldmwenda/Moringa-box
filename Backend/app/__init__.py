@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -12,7 +12,9 @@ jwt = JWTManager()
 bcrypt = Bcrypt()
 ma = Marshmallow()
 
+
 def create_app(config_override=None):
+
     app = Flask(__name__)
     app.config.from_object('app.config.Config')
 
@@ -28,7 +30,7 @@ def create_app(config_override=None):
 
     @app.route('/health')
     def health_check():
-        return {"status": "healthy"}, 200
+        return jsonify({"status": "healthy"}), 200
 
     @app.post('/api/search')
     def search_files():
@@ -38,7 +40,7 @@ def create_app(config_override=None):
         query = str(payload.get('query', '')).strip()
         files = payload.get('files', [])
         if not isinstance(files, list):
-            return {"error": "files must be an array"}, 400
-        return {"query": query, "provider": "ollama", "results": rank_files(files, query)}, 200
+            return jsonify({"error": "files must be an array"}), 400
+        return jsonify({"query": query, "provider": "ollama", "results": rank_files(files, query)}), 200
 
     return app

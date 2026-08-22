@@ -59,6 +59,46 @@
   gap: 16px;
 }
 
+.header-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.header-search {
+  width: 190px;
+}
+
+.header-search-wrap .search-clear-inline {
+  position: absolute;
+  right: 43px;
+}
+
+.user-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.signout-btn {
+  border: 0;
+  background: transparent;
+  color: #718073;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.signout-btn:hover {
+  color: #24583d;
+  background: rgba(36, 88, 61, 0.08);
+}
+
+
 .auth-status {
   position: absolute;
   top: 68px;
@@ -601,7 +641,21 @@
   background: rgba(255, 253, 247, 0.88);
   color: #24583d;
   font-size: 1.15rem;
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
+
+.heart-btn:hover {
+  transform: scale(1.1);
+}
+
+.heart-btn.favorited {
+  color: #d94a4a;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(217, 74, 74, 0.25);
+}
+
 
 .box-details {
   padding: 20px 19px 19px;
@@ -690,7 +744,72 @@
   align-items: center;
   gap: 6px;
   margin-left: auto;
+  position: relative;
 }
+
+@media (max-width: 880px) {
+  .header-search-wrap {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .header-search {
+    width: 100%;
+  }
+
+  .site-header {
+    flex-wrap: wrap;
+  }
+}
+
+.search-clear-inline {
+  position: absolute;
+  right: 42px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #718073;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.search-clear-inline:hover {
+  color: #1d3928;
+}
+
+.no-results {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 50px 20px;
+  background: #fffdf7;
+  border-radius: 20px;
+  box-shadow: 0 12px 30px rgba(40, 67, 45, 0.05);
+}
+
+.no-results p {
+  color: #69766b;
+  font-size: 1rem;
+  margin: 0 0 16px;
+}
+
+.clear-search-btn {
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: #24583d;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.clear-search-btn:hover {
+  background: #1a422d;
+}
+
 
 .catalog-search {
   width: 180px;
@@ -790,11 +909,80 @@
 .cart-item {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding-bottom: 14px;
   border-bottom: 1px solid #e2e5da;
   color: #37503d;
   font-size: 0.84rem;
 }
+
+.cart-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cart-item-title {
+  font-weight: 600;
+}
+
+.cart-item-category {
+  color: #7a857b;
+  font-size: 0.72rem;
+}
+
+.cart-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cart-remove-btn {
+  border: 0;
+  background: transparent;
+  color: #9aa89d;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
+.cart-remove-btn:hover {
+  color: #c94a4a;
+  background: rgba(201, 74, 74, 0.1);
+}
+
+.order-notice {
+  padding: 12px 14px;
+  background: #eaf7ef;
+  color: #24583d;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+
+.signed-in-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.signout-modal-btn {
+  background: rgba(255, 253, 247, 0.2);
+  color: #fffdf7;
+  border: 1px solid rgba(255, 253, 247, 0.4);
+}
+
+.signout-modal-btn:hover {
+  background: #e24b4b;
+  color: #fff;
+  border-color: #e24b4b;
+}
+
 
 .cart-item strong,
 .cart-total strong {
@@ -817,6 +1005,45 @@
 .checkout-btn:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.batch-actions {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 18px;
+}
+
+.save-batch-btn {
+  padding: 11px 14px;
+  border: 1px solid #d6ddd1;
+  border-radius: 999px;
+  background: transparent;
+  color: #24583d;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.save-batch-btn:hover:not(:disabled) {
+  background: #e7eee0;
+}
+
+.save-batch-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.batch-label {
+  color: #748077;
+  font-size: 0.75rem;
+}
+
+.batch-select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d6ddd1;
+  border-radius: 8px;
+  background: #fffdf7;
+  color: #24583d;
 }
 
 @media (max-width: 880px) {

@@ -5,23 +5,47 @@ from urllib.request import Request, urlopen
 
 
 def _local_rank(files, query):
-    terms = query.lower().split()
+    if not query or not files:
+        return files if isinstance(files, list) else []
+    terms = [term.lower() for term in str(query).split() if term.strip()]
+    if not terms:
+        return files
     scored = []
     for file in files:
-        text = ' '.join(str(file.get(key, '')) for key in ('name', 'type', 'updated')).lower()
-        score = sum(3 if term in str(file.get('name', '')).lower() else 1 for term in terms if term in text)
-        if score:
+        if not isinstance(file, dict):
+            continue
+        name = str(file.get('name') or file.get('title') or '').lower()
+        file_type = str(file.get('type') or file.get('category') or file.get('file_type') or '').lower()
+        updated_or_desc = str(file.get('updated') or file.get('description') or '').lower()
+        combined = f"{name} {file_type} {updated_or_desc}"
+
+        score = 0
+        for term in terms:
+            if term in name:
+                score += 3
+            elif term in file_type:
+                score += 2
+            elif term in combined:
+                score += 1
+
+        if score > 0:
             scored.append((score, file))
-    return [file for _, file in sorted(scored, key=lambda item: item[0], reverse=True)]
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [file for _, file in scored]
 
 
 def _ollama_rank(files, query):
     endpoint = os.getenv('OLLAMA_URL', 'http://127.0.0.1:11434/api/generate')
     model = os.getenv('OLLAMA_MODEL', 'qwen2.5:0.5b')
+    dict_files = [f for f in files if isinstance(f, dict)]
+    if not dict_files:
+        return []
+
     prompt = (
         'Return JSON only in the form {"ids":[number]}. '
         f'Rank file ids most relevant to the search query "{query}". '
-        f'Files: {json.dumps([{key: file.get(key) for key in ("id", "name", "type", "updated")} for file in files])}'
+        f'Files: {json.dumps([{key: file.get(key) for key in ("id", "name", "title", "type", "category", "updated", "description") if key in file} for file in dict_files])}'
     )
     body = json.dumps({
         'model': model,
@@ -30,25 +54,39 @@ def _ollama_rank(files, query):
         'format': 'json',
     }).encode('utf-8')
     request = Request(endpoint, data=body, headers={'Content-Type': 'application/json'}, method='POST')
-    with urlopen(request, timeout=8) as response:
+    with urlopen(request, timeout=5) as response:
         result = json.loads(response.read().decode('utf-8'))
-    generated = json.loads(result.get('response', '{}'))
-    ids = generated.get('ids', []) if isinstance(generated, dict) else generated
-    valid_ids = {file.get('id') for file in files}
-    return [file for file in files if file.get('id') in ids and file.get('id') in valid_ids]
+
+    raw_resp = result.get('response', '{}')
+    generated = json.loads(raw_resp) if isinstance(raw_resp, str) else raw_resp
+    ids = generated.get('ids', []) if isinstance(generated, dict) else (generated if isinstance(generated, list) else [])
+
+    file_map = {str(file.get('id')): file for file in dict_files if file.get('id') is not None}
+    ranked = []
+    seen = set()
+    for item_id in ids:
+        str_id = str(item_id)
+        if str_id in file_map and str_id not in seen:
+            seen.add(str_id)
+            ranked.append(file_map[str_id])
+    return ranked
 
 
 def rank_files(files, query):
-    if not query:
+    if not isinstance(files, list):
+        return []
+    if not query or not str(query).strip():
         return files
-    candidates = _local_rank(files, query)
+    query_clean = str(query).strip()
+    candidates = _local_rank(files, query_clean)
     if not candidates:
         return []
     try:
-        ranked = _ollama_rank(candidates, query)
+        ranked = _ollama_rank(candidates, query_clean)
         if ranked:
-            ranked_ids = {file.get('id') for file in ranked}
-            return ranked + [file for file in candidates if file.get('id') not in ranked_ids]
+            ranked_id_set = {str(file.get('id')) for file in ranked if file.get('id') is not None}
+            remaining = [file for file in candidates if str(file.get('id')) not in ranked_id_set]
+            return ranked + remaining
     except (OSError, ValueError, TypeError, URLError, TimeoutError, json.JSONDecodeError):
         pass
     return candidates
