@@ -36,28 +36,39 @@ def _local_rank(files, query):
 
 
 def _ollama_rank(files, query):
-    endpoint = os.getenv('OLLAMA_URL', 'http://127.0.0.1:11434/api/generate')
+    api_key = os.getenv('OLLAMA_API_KEY', '').strip()
+    base_url = os.getenv('OLLAMA_BASE_URL', '').strip().rstrip('/')
+    endpoint = os.getenv('OLLAMA_URL', '').strip()
     model = os.getenv('OLLAMA_MODEL', 'qwen2.5:0.5b')
     dict_files = [f for f in files if isinstance(f, dict)]
     if not dict_files:
         return []
+
+    use_openai_compat = bool(api_key or base_url.endswith('/v1') or endpoint.endswith('/v1/chat/completions'))
+    if use_openai_compat:
+        openai_endpoint = endpoint if endpoint.endswith('/v1/chat/completions') else f"{base_url or 'http://127.0.0.1:11434/v1'}/chat/completions"
+    else:
+        openai_endpoint = endpoint or 'http://127.0.0.1:11434/api/generate'
 
     prompt = (
         'Return JSON only in the form {"ids":[number]}. '
         f'Rank file ids most relevant to the search query "{query}". '
         f'Files: {json.dumps([{key: file.get(key) for key in ("id", "name", "title", "type", "category", "updated", "description") if key in file} for file in dict_files])}'
     )
-    body = json.dumps({
-        'model': model,
-        'prompt': prompt,
-        'stream': False,
-        'format': 'json',
-    }).encode('utf-8')
-    request = Request(endpoint, data=body, headers={'Content-Type': 'application/json'}, method='POST')
+    if use_openai_compat:
+        payload = {'model': model, 'messages': [{'role': 'system', 'content': 'Return valid JSON only.'}, {'role': 'user', 'content': prompt}], 'stream': False, 'temperature': 0, 'response_format': {'type': 'json_object'}}
+        headers = {'Content-Type': 'application/json'}
+        if api_key:
+            headers['Authorization'] = f'Bearer {api_key}'
+    else:
+        payload = {'model': model, 'prompt': prompt, 'stream': False, 'format': 'json'}
+        headers = {'Content-Type': 'application/json'}
+    body = json.dumps(payload).encode('utf-8')
+    request = Request(openai_endpoint, data=body, headers=headers, method='POST')
     with urlopen(request, timeout=5) as response:
         result = json.loads(response.read().decode('utf-8'))
 
-    raw_resp = result.get('response', '{}')
+    raw_resp = result.get('choices', [{}])[0].get('message', {}).get('content', '{}') if use_openai_compat else result.get('response', '{}')
     generated = json.loads(raw_resp) if isinstance(raw_resp, str) else raw_resp
     ids = generated.get('ids', []) if isinstance(generated, dict) else (generated if isinstance(generated, list) else [])
 
@@ -79,10 +90,10 @@ def rank_files(files, query):
         return files
     query_clean = str(query).strip()
     candidates = _local_rank(files, query_clean)
-    if not candidates:
+    if not files:
         return []
     try:
-        ranked = _ollama_rank(candidates, query_clean)
+        ranked = _ollama_rank(files, query_clean)
         if ranked:
             ranked_id_set = {str(file.get('id')) for file in ranked if file.get('id') is not None}
             remaining = [file for file in candidates if str(file.get('id')) not in ranked_id_set]

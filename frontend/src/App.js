@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import "./App.css";
 import GridDistortion from "./components/GridDistortion";
+import LoginPage from "./pages/LoginPage";
 import { searchItems, searchWithBackend, transcribeWithBrowserSpeech } from "./services/searchService";
 
 const boxes = [
@@ -64,7 +65,7 @@ const categories = ["All boxes", "Everyday", "Beginner", "Wellness"];
 const pageSize = 3;
 const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
 
-function App() {
+function StorefrontApp() {
   const [activeCategory, setActiveCategory] = useState("All boxes");
   const [page, setPage] = useState(1);
   const [cart, setCart] = useState(() => {
@@ -371,9 +372,7 @@ function App() {
               </button>
             </div>
           ) : (
-            <button className="login-btn" onClick={openLogin}>
-              Sign in
-            </button>
+            <a className="login-btn" href="/login">Sign in</a>
           )}
           <button
             className="cart-btn"
@@ -753,6 +752,13 @@ function App() {
       )}
     </main>
   );
+}
+
+function App() {
+  if (window.location.pathname === "/login") {
+    return <LoginPage />;
+  }
+  return <StorefrontApp />;
 }
 
 export default App;
